@@ -109,7 +109,7 @@ int main(int argc, char** argv)
             {
                 avg_latency = avg_latency + latency_values[i]; 
             }
-            avg_latency = avg_latency / 10;
+            avg_latency = avg_latency / 9;
 
             // Calc std deviation. (Skip the 0th iteration)
             squared_diff_sum = 0.0;
@@ -117,7 +117,7 @@ int main(int argc, char** argv)
             {
                 squared_diff_sum += (latency_values[i] - avg_latency) * (latency_values[i] - avg_latency);
             }
-            std_dev = sqrt(squared_diff_sum / 10);
+            std_dev = sqrt(squared_diff_sum / 9);
 
             //Print the metrics for the current message_size
             if (message_size_in_kb != 16)
