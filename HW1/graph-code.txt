@@ -1,0 +1,41 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Data (keeping original values)
+message_sizes = [ '32', '64', '128', '256', '512', '1024', '2048']
+latencies = [ 0.000021, 0.000029, 0.000048, 0.000117, 0.000153, 0.000254, 0.000537]
+std_dev = [ 0.000004, 0.000001, 0.000007, 0.000165, 0.000153, 0.000199, 0.000537]
+
+# Create the plot
+plt.figure(figsize=(12, 6))
+
+# Plot the bars
+bars = plt.bar(range(len(message_sizes)), latencies, 
+               width=0.6, alpha=0.8, color='skyblue', label='Round Trip Latency')
+
+# Add error bars directly using plt.errorbar for more control
+for i in range(len(message_sizes)):
+    plt.errorbar(i, latencies[i], yerr=std_dev[i], fmt='o', color='black', capsize=5)
+
+# Customize the plot
+plt.grid(True, alpha=0.2)
+plt.xlabel('Message Size (KB)', fontsize=12)
+plt.ylabel('Average Round Trip Latency (s)', fontsize=12)
+
+# Format y-axis to display in scientific notation
+plt.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
+
+plt.title('Network Latency vs Message Size', fontsize=14, pad=20)
+
+# Set x-tick positions and labels
+plt.xticks(range(len(message_sizes)), message_sizes)
+
+# Adjust y-axis limits to allow for error bars below zero
+# This range starts from a negative value, allowing the error bars to go below 0
+plt.ylim(-0.00012, 0.0012)  # Adjust lower limit for error bars
+
+# Adjust layout to prevent label clipping
+plt.tight_layout()
+
+# Show the plot
+plt.show()
