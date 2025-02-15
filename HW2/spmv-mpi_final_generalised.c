@@ -26,10 +26,6 @@ void usage(int argc, char** argv)
 // MIN_ITER, MAX_ITER, TIME_LIMIT, 
 double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
 {
-
-    // ---------- Initialize the MPI environment--------------
-    //MPI_Init(NULL, NULL);
-
     //----------- MPI Process variables --------------
     int process_number;
     MPI_Comm_rank(MPI_COMM_WORLD, &process_number);
@@ -79,7 +75,6 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
     // Proces-0 will have the final y[]
     // ---------------------- Accumulate the results ---------------------------------
 
-    
            
     // Step 1: Odd processes send to even processes
     if (process_number % 2 == 1 && process_number < num_of_processes) 
@@ -97,7 +92,7 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         }
         free(temp);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);    //*****
 
     // Step 2: Every fourth process (2, 6, 10, ...) sends to (0, 4, 8, ...)
     if (process_number % 4 == 2 && process_number < num_of_processes) 
@@ -115,7 +110,7 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         }
         free(temp);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);    //******
 
     // Step 3: Process 4, 8, 12, ... send to process 0
     if (process_number % 4 == 0 && process_number > 0 && process_number < num_of_processes) {
@@ -135,10 +130,10 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         }
         free(temp);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);    //******
         
     
-    if (process_number != 0)    //------
+    if (process_number != 0)    //------ Clear the y[] of all the Processes other than 0
     {
         memset(y, 0, num_rows * sizeof(float));
     }
@@ -194,7 +189,6 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
     
     for(int j = 0; j < num_iterations; j++)
     {
-        MPI_Barrier(MPI_COMM_WORLD);
         // ******************************** Perform SpMV ************************************************
 
         // The process with process_number iterates [ subarray_length_per_process * process_number : subarray_length_per_process * (process_number+1) ]
@@ -216,82 +210,16 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
             }   
         }
 
+
+
         // Step-1: Processes 1,3,5,7 send their y[] to processes 0,2,4,6 respectively, to be accumulated into their y[]
         // Step-2: Processes 2, 6 send their y[] to Processes 0, 4 respectively, to be accumulated into their y[]
         // Step-3: Process 4 sends its y[] to 0, to be accumulated into its y[]
         // Process-0 will have the final y[]
         // ---------------------- Accumulate the results ---------------------------------
 
-        /*
-        // ** Step-1: Odd Processes 1,3,5,7 send to Even Processes 0,2,4,6 
-        if ( process_number == 1 || process_number == 3 || process_number == 5 || process_number == 7 )
-        {
-            MPI_Send(y, num_rows, MPI_FLOAT, process_number-1, 100, MPI_COMM_WORLD); // Send y[] to process - 1
-        }
 
-        if (  process_number == 0 || process_number == 2 || process_number == 4 || process_number == 6 )
-        {
-            float temp[num_rows];    // Temporary array to receive the y[] from sending processes
-            MPI_Recv(temp, num_rows, MPI_FLOAT, process_number + 1, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  // Receive y[] from process + 1
-            
-            //Accumulate values from the received array
-            for (int i=0; i<num_rows; i++)
-            {
-                y[i] = y[i] + temp[i]; 
-            }
-
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);    // -- Barrier to synchronize Step-1 processes --
-
-
-        // ** Step-2: Even Processes : 2, 6 send to Even Processes 0, 4 respectively 
-        if ( process_number == 2 || process_number == 6 )
-        {
-            MPI_Send(y, num_rows, MPI_FLOAT, process_number-2, 100, MPI_COMM_WORLD); // Send y[] to process - 2 
-        }
-
-        if ( process_number == 0 || process_number == 4 )
-        {
-            float temp[num_rows];
-            MPI_Recv(temp, num_rows, MPI_FLOAT, process_number + 2, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  // Receive y[] from process + 2
-
-            //Accumulate values from the received array
-            for (int i=0; i<num_rows; i++)
-            {
-                y[i] = y[i] + temp[i]; 
-            }
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);    // -- Barrier to synchronize Step-1 processes --
-
-
-        // ** Step-3: Process 4 send to 0
-        if ( process_number == 4 )
-        {
-            MPI_Send(y, num_rows, MPI_FLOAT, process_number-4, 100, MPI_COMM_WORLD); // Send y[] to process-0
-        }
-
-        if ( process_number == 0 )
-        {
-            float temp[num_rows];
-            MPI_Recv(temp, num_rows, MPI_FLOAT, process_number + 4, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  // Receive y[] from process + 2
-
-            //Accumulate values from the received array
-            for (int i=0; i<num_rows; i++)
-            {
-                y[i] = y[i] + temp[i]; 
-            }
-        }
-        */
-
-        //------------------------------------------------ y[] Accumulation Done --------------------------------------------------------------------------------------------
-        
-
-
-        //*****************************************************************
-        
-        // Step 1: Odd processes send to even processes
+        // ******** Step 1: Odd processes send to even processes
         if (process_number % 2 == 1 && process_number < num_of_processes) 
         {
             MPI_Send(y, num_rows, MPI_FLOAT, process_number - 1, 100, MPI_COMM_WORLD);
@@ -307,9 +235,9 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
             }
             free(temp);
         }
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD);    //-----Barrier------
 
-        // Step 2: Every fourth process (2, 6, 10, ...) sends to (0, 4, 8, ...)
+        // ******** Step 2: Every fourth process (2, 6, 10, ...) sends to (0, 4, 8, ...)
         if (process_number % 4 == 2 && process_number < num_of_processes) 
         {
             MPI_Send(y, num_rows, MPI_FLOAT, process_number - 2, 100, MPI_COMM_WORLD);
@@ -325,9 +253,9 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
             }
             free(temp);
         }
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD);    //-----Barrier------
 
-        // Step 3: Process 4, 8, 12, ... send to process 0
+        // ******** Step 3: Process 4, 8, 12, ... send to process 0
         if (process_number % 4 == 0 && process_number > 0 && process_number < num_of_processes) {
             MPI_Send(y, num_rows, MPI_FLOAT, 0, 100, MPI_COMM_WORLD);
         }
@@ -345,16 +273,13 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
             }
             free(temp);
         }
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD);    //-----Barrier------
         
                         
 
-            
-        //*******************************************************************
+        //------------------------------------------------ y[] Accumulation Done --------------------------------------------------------------------------------------------
+        
 
-        
-        // ******************************** Completed SpMV ************************************************
-        
         // Clear the y[] in all the processes other than process-0
         // Only process-0 accuulates the values from the previous iterations
         if (process_number != 0)
@@ -365,6 +290,8 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         MPI_Barrier(MPI_COMM_WORLD);    // -- Barrier to synchronize Step-1 processes --
     }
     
+    // ******************************** Completed SpMV ************************************************
+
 
     double msec_per_iteration;
     if (process_number == 0)
@@ -377,9 +304,6 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
     }
 
     return msec_per_iteration;
-    
-
-    //return estimated_time;
 }
 
 int main(int argc, char** argv)
