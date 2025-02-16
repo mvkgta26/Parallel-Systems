@@ -5,6 +5,7 @@
 #include "timer.h"
 #include "formats.h"
 
+#include <omp.h>
 #include <mpi.h>
                                                     
 #define max(a,b) \
@@ -23,13 +24,10 @@ void usage(int argc, char** argv)
     printf("Note: my_matrix.mtx must be real-valued sparse matrix in the MatrixMarket file format.\n"); 
 }
 
-
 void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number, int num_of_processes)
 {
-
     int num_nonzeros = coo->num_nonzeros;
     int num_rows = coo->num_rows;
-
 
     // Step-1: Processes 1,3,5,7 send their y[] to processes 0,2,4,6 respectively, to be accumulated into their y[]
     // Step-2: Processes 2, 6 send their y[] to Processes 0, 4 respectively, to be accumulated into their y[]
@@ -37,7 +35,6 @@ void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number
     // Proces-0 will have the final y[]
     // ---------------------- Accumulate the results ---------------------------------
 
-           
     // Step 1: Odd processes send to even processes
     if (process_number % 2 == 1 && process_number < num_of_processes) 
     {
@@ -49,6 +46,7 @@ void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number
         float* temp = (float*)malloc(num_rows * sizeof(float));
         MPI_Recv(temp, num_rows, MPI_FLOAT, process_number + 1, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         
+        #pragma omp parallel for
         for (int i = 0; i < num_rows; i++) {
             y[i] += temp[i];
         }
@@ -67,6 +65,7 @@ void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number
         float* temp = (float*)malloc(num_rows * sizeof(float));
         MPI_Recv(temp, num_rows, MPI_FLOAT, process_number + 2, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         
+        #pragma omp parallel for
         for (int i = 0; i < num_rows; i++) {
             y[i] += temp[i];
         }
@@ -86,6 +85,7 @@ void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number
         for (int sender = 4; sender < num_of_processes; sender += 4) {
             MPI_Recv(temp, num_rows, MPI_FLOAT, sender, 100, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             
+            #pragma omp parallel for
             for (int i = 0; i < num_rows; i++) {
                 y[i] += temp[i];
             }
@@ -99,8 +99,8 @@ void accumulate_results(coo_matrix * coo, float* x, float* y, int process_number
     {
         memset(y, 0, num_rows * sizeof(float));
     }
-}
 
+}
 
 // MIN_ITER, MAX_ITER, TIME_LIMIT, 
 double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
@@ -122,12 +122,15 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         timer_start(&time_one_iteration);
     }
 
+
     int subarray_length_per_process = num_nonzeros / num_of_processes;         // Number of processes = 8
 
     // A separate copy of y[] is created in the heap memory of each of the processes. 
     // The process with process_number iterates [ subarray_length_per_process * (process_number) : subarray_length_per_process * (process_number+1) ]
+    #pragma omp parallel for
     for (int i = subarray_length_per_process * process_number; i < subarray_length_per_process * (process_number+1); i++)
     {   
+        #pragma omp atomic
         y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
     }
 
@@ -137,17 +140,18 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
     {
         if (num_nonzeros % num_of_processes != 0)   // Check if there is actually any remainder
         {
+            #pragma omp parallel for
             for (int i = subarray_length_per_process * num_of_processes; i < num_nonzeros; i++)
             {
+                #pragma omp atomic
                 y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
             }
         }   
     }
 
-
-    //--------------------------- y[] Accumulation Start ----------------------------------------------------
+    //------------------------------------------------ Y[] Accumulation Start --------------------------------
     accumulate_results(coo, x, y, process_number, num_of_processes);
-    //--------------------------- y[] Accumulation Done ----------------------------------------------------
+    //------------------------------------------------ y[] Accumulation Done --------------------------------------------------------------------------------------------
     
     
     // Print estimated time
@@ -162,7 +166,7 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
             MPI_Send(&estimated_time, 1, MPI_DOUBLE, p, 100, MPI_COMM_WORLD); // Send y[] to process-0
         }
 
-        printf("estimated time for once %f\n", (float) estimated_time);     // Delete this
+        //printf("estimated time for once %f\n", (float) estimated_time);     // Delete this
     }
 
     // Receive the estimated time from process-0 for consistency
@@ -178,7 +182,7 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
     // printf("\tPerforming %d iterations\n", num_iterations);
     // if (process_number == 0)
     // {
-        num_iterations = 400;  // Hardcoding 400 for consistency among different benchmarks
+        num_iterations = 400;
 
         // if (estimated_time == 0)
         //     num_iterations = MAX_ITER;
@@ -201,8 +205,10 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         // ******************************** Perform SpMV ************************************************
 
         // The process with process_number iterates [ subarray_length_per_process * process_number : subarray_length_per_process * (process_number+1) ]
+        #pragma omp parallel for
         for (int i = subarray_length_per_process * process_number; i < subarray_length_per_process * (process_number+1); i++)
-        {   
+        {
+            #pragma omp atomic   
             y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
         }
 
@@ -212,17 +218,20 @@ double benchmark_coo_spmv(coo_matrix * coo, float* x, float* y)
         {
             if (num_nonzeros % num_of_processes != 0)   // Check if there is actually any remainder
             {
+                #pragma omp parallel for
                 for (int i = subarray_length_per_process * num_of_processes; i < num_nonzeros; i++)
                 {
+                    #pragma omp atomic
                     y[coo->rows[i]] += coo->vals[i] * x[coo->cols[i]];
                 }
             }   
         }
 
 
-        // ---------------------- Accumulate the results ---------------------------------
+        //------------------------------------------------ y[] Accumulation Start --------------------------------------------------------------------------------------------
         accumulate_results(coo, x, y, process_number, num_of_processes);
-        // ---------------------- Accumulate Done ---------------------------------
+        //------------------------------------------------ y[] Accumulation Done --------------------------------------------------------------------------------------------
+    
 
         MPI_Barrier(MPI_COMM_WORLD);    // -- Barrier to synchronize Step-1 processes --
     }
