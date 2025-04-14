@@ -1,0 +1,12 @@
+
+
+
+cd /home/vmangap/HW3/
+ 
+ salloc -N1 -n1
+nvcc spmv-cuda.cu
+./spmv ./example_matrices/3_diags_2x4.mtx
+
+
+
+nvcc spmv-cuda.c -lm -o spmv-mpi -I ./include
